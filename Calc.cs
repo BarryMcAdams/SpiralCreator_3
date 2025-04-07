@@ -1,14 +1,16 @@
-﻿namespace SpiralStairPlugin
+﻿using System;
+
+namespace SpiralStairPlugin
 {
     public class Calc : ICalc
     {
         public StairParameters Calculate(ValidatedStairInput input)
         {
-            int numTreads = (int)(input.OverallHeight / 7.5);
-            if (numTreads < 1) numTreads = 1;
-
-            double riserHeight = input.OverallHeight / numTreads;
-            double treadAngle = input.RotationDeg / numTreads;
+            // 16 total steps (15 treads + 1 landing), riser height = OverallHeight / total steps
+            int totalSteps = (int)Math.Ceiling(input.OverallHeight / 9.5); // 16 with 144"
+            int numTreads = totalSteps - 1; // 15 treads, landing is the 16th
+            double riserHeight = input.OverallHeight / totalSteps;
+            double treadAngle = input.RotationDeg / numTreads; // Rotation over 15 treads
 
             return new StairParameters
             {
@@ -25,12 +27,12 @@
 
         public ComplianceRetryOption HandleComplianceFailure(StairParameters parameters)
         {
-            if (parameters.RiserHeight < 6 || parameters.RiserHeight > 8)
+            if (parameters.RiserHeight > 9.5)
             {
                 return new ComplianceRetryOption
                 {
                     ShouldRetry = true,
-                    Message = "Riser height must be between 6 and 8 inches."
+                    Message = "Riser height must not exceed 9.5 inches."
                 };
             }
             return new ComplianceRetryOption { ShouldRetry = false };
