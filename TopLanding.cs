@@ -9,77 +9,97 @@ namespace SpiralStairPlugin
     {
         public Entity[] Create(Document doc, StairParameters parameters)
         {
+            if (doc == null || doc.Database == null)
+            {
+                throw new ArgumentNullException(nameof(doc), "Document or its database is null.");
+            }
+
             using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
             {
                 BlockTable bt = tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead) as BlockTable;
-                BlockTableRecord btr = tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite) as BlockTableRecord;
+                if (bt == null)
+                {
+                    throw new InvalidOperationException("Failed to access BlockTable.");
+                }
 
-                double innerRadius = parameters.CenterPoleDia / 2; // For the arc cutout
+                BlockTableRecord btr = tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite) as BlockTableRecord;
+                if (btr == null)
+                {
+                    throw new InvalidOperationException("Failed to access BlockTableRecord for ModelSpace.");
+                }
+
+                // Define the treads array to store the landing entity
+                Entity[] treads = new Entity[1]; // Create one landing
+
                 double outerRadius = parameters.OutsideDia / 2;    // Full width from center to outside
                 double landingLength = 50.0;                       // Long side of rectangle
                 double landingThickness = 0.25;                    // Consistent with treads
                 double height = parameters.OverallHeight - landingThickness; // Top at OverallHeight
                 double treadAngleRad = parameters.TreadAngle * Math.PI / 180;
                 double landingStartAngle = parameters.NumTreads * treadAngleRad * (parameters.IsClockwise ? 1 : -1);
-                double landingEndAngle = landingStartAngle + treadAngleRad * (parameters.IsClockwise ? 1 : -1);
 
-                // Create the outer rectangle (aligned along X-axis initially, short edge radial, from 0 to outerRadius)
-                using (Polyline outerRect = new Polyline())
+                // Validate parameters
+                if (outerRadius <= 0 || landingLength <= 0 || landingThickness <= 0)
                 {
-                    outerRect.AddVertexAt(0, new Point2d(0, 0), 0, 0, 0);                    // Bottom-left (at pole center)
-                    outerRect.AddVertexAt(1, new Point2d(outerRadius, 0), 0, 0, 0);          // Bottom-right
-                    outerRect.AddVertexAt(2, new Point2d(outerRadius, landingLength), 0, 0, 0); // Top-right
-                    outerRect.AddVertexAt(3, new Point2d(0, landingLength), 0, 0, 0);        // Top-left
-                    outerRect.Closed = true;
-
-                    // Create the inner arc to cut out the center pole
-                    using (CircularArc3d innerArc = new CircularArc3d(
-                        Point3d.Origin, Vector3d.ZAxis, Vector3d.XAxis, innerRadius, landingStartAngle, landingEndAngle))
-                    {
-                        // Approximate the arc with a Polyline
-                        using (Polyline innerPoly = new Polyline())
-                        {
-                            int segments = 10;
-                            double angleStep = (landingEndAngle - landingStartAngle) / segments;
-                            for (int j = 0; j <= segments; j++)
-                            {
-                                double angle = landingStartAngle + j * angleStep;
-                                innerPoly.AddVertexAt(j, new Point2d(innerRadius * Math.Cos(angle), innerRadius * Math.Sin(angle)), 0, 0, 0);
-                            }
-                            innerPoly.Closed = true;
-
-                            // Create regions and subtract the arc from the rectangle
-                            DBObjectCollection outerBoundary = new DBObjectCollection { outerRect };
-                            DBObjectCollection innerBoundary = new DBObjectCollection { innerPoly };
-                            using (DBObjectCollection outerRegions = Region.CreateFromCurves(outerBoundary))
-                            using (DBObjectCollection innerRegions = Region.CreateFromCurves(innerBoundary))
-                            {
-                                Region outerRegion = outerRegions[0] as Region;
-                                Region innerRegion = innerRegions[0] as Region;
-
-                                outerRegion.BooleanOperation(BooleanOperationType.BoolSubtract, innerRegion);
-
-                                // Extrude into a landing
-                                using (Solid3d landing = new Solid3d())
-                                {
-                                    landing.CreateExtrudedSolid(outerRegion, new Vector3d(0, 0, landingThickness), new SweepOptions());
-
-                                    // Rotate to match the 16th tread's start angle (no additional rotation)
-                                    landing.TransformBy(Matrix3d.Rotation(landingStartAngle, Vector3d.ZAxis, Point3d.Origin));
-
-                                    // Move so top is at OverallHeight
-                                    landing.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height)));
-
-                                    btr.AppendEntity(landing);
-                                    tr.AddNewlyCreatedDBObject(landing, true);
-
-                                    tr.Commit();
-                                    return new Entity[] { landing };
-                                }
-                            }
-                        }
-                    }
+                    doc.Editor.WriteMessage($"\nInvalid parameters: outerRadius={outerRadius}, landingLength={landingLength}, landingThickness={landingThickness}. All must be positive.");
+                    throw new ArgumentException("All dimensions must be positive.");
                 }
+                if (height < 0)
+                {
+                    doc.Editor.WriteMessage($"\nInvalid height: height={height}. Height must be non-negative.");
+                    throw new ArgumentException("Height must be non-negative.");
+                }
+
+                // Create a simple rectangular landing (without arc cutout for now)
+                Solid3d landing = new Solid3d();
+                try
+                {
+                    // Create a rectangular Solid3d using CreateBox
+                    landing.CreateBox(outerRadius, landingLength, landingThickness);
+                    doc.Editor.WriteMessage("\nSuccessfully created landing box.");
+
+                    // Position the box so the bottom-left corner is at (0, 0, 0)
+                    // CreateBox centers the box at (0, 0, 0), so we need to shift it
+                    landing.TransformBy(Matrix3d.Displacement(new Vector3d(outerRadius / 2, landingLength / 2, 0)));
+                    doc.Editor.WriteMessage("\nSuccessfully positioned landing.");
+
+                    // Validate the resulting geometry
+                    if (landing == null || landing.Bounds == null)
+                    {
+                        throw new InvalidOperationException("Landing geometry is invalid after creation.");
+                    }
+                    doc.Editor.WriteMessage("\nLanding geometry validated successfully.");
+
+                    // Apply transformations
+                    landing.TransformBy(Matrix3d.Rotation(landingStartAngle, Vector3d.ZAxis, Point3d.Origin));
+                    doc.Editor.WriteMessage("\nSuccessfully applied rotation transformation.");
+                    landing.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height)));
+                    doc.Editor.WriteMessage("\nSuccessfully applied height displacement transformation.");
+
+                    btr.AppendEntity(landing);
+                    doc.Editor.WriteMessage("\nSuccessfully appended landing to BlockTableRecord.");
+                    tr.AddNewlyCreatedDBObject(landing, true);
+                    doc.Editor.WriteMessage("\nSuccessfully added landing to transaction.");
+
+                    treads[0] = landing;
+                    landing.DowngradeOpen();
+                    doc.Editor.WriteMessage("\nSuccessfully downgraded landing open state.");
+                }
+                catch (Exception ex)
+                {
+                    doc.Editor.WriteMessage($"\nFailed to create landing: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                    treads[0] = null; // Ensure treads[0] is explicitly null if creation fails
+                    throw;
+                }
+                finally
+                {
+                    landing?.Dispose();
+                }
+
+                tr.Commit();
+                doc.Editor.WriteMessage("\nSuccessfully committed transaction.");
+
+                return treads;
             }
         }
     }

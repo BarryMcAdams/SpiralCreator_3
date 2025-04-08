@@ -9,77 +9,86 @@ namespace SpiralStairPlugin
     {
         public Entity[] Create(Document doc, StairParameters parameters)
         {
-            Entity[] treads = new Entity[1]; // Create one tread at a time
-            double innerRadius = parameters.CenterPoleDia / 2;
-            double outerRadius = parameters.OutsideDia / 2;
-            double treadThickness = 0.25;
-            double treadAngleRad = parameters.TreadAngle * Math.PI / 180;
+            if (doc == null || doc.Database == null)
+            {
+                throw new ArgumentNullException(nameof(doc), "Document or its database is null.");
+            }
 
             using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
             {
                 BlockTable bt = tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead) as BlockTable;
-                BlockTableRecord btr = tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite) as BlockTableRecord;
-
-                // Use parameters.NumTreads as the step index
-                int stepIndex = parameters.NumTreads;
-                double height = (stepIndex + 1) * parameters.RiserHeight; // Start at one riser height above Z=0
-                double startAngle = stepIndex * treadAngleRad * (parameters.IsClockwise ? 1 : -1);
-                double endAngle = startAngle + treadAngleRad * (parameters.IsClockwise ? 1 : -1);
-
-                // Create inner and outer arcs in memory
-                using (CircularArc3d innerArc = new CircularArc3d(
-                    Point3d.Origin, Vector3d.ZAxis, Vector3d.XAxis, innerRadius, startAngle, endAngle))
-                using (CircularArc3d outerArc = new CircularArc3d(
-                    Point3d.Origin, Vector3d.ZAxis, Vector3d.XAxis, outerRadius, startAngle, endAngle))
+                if (bt == null)
                 {
-                    // Convert arcs to Polyline for region creation
-                    using (Polyline innerPoly = new Polyline())
-                    using (Polyline outerPoly = new Polyline())
+                    throw new InvalidOperationException("Failed to access BlockTable.");
+                }
+
+                BlockTableRecord btr = tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite) as BlockTableRecord;
+                if (btr == null)
+                {
+                    throw new InvalidOperationException("Failed to access BlockTableRecord for ModelSpace.");
+                }
+
+                // Define the treads array to store the tread entity
+                Entity[] treads = new Entity[1]; // Create one tread
+
+                double outerRadius = parameters.OutsideDia / 2;    // Full width from center to outside
+                double treadLength = 50.0;                         // Approximate length (same as landing for simplicity)
+                double treadThickness = 0.25;                      // Consistent with landing
+                double height = (parameters.NumTreads + 1) * parameters.RiserHeight; // Height of this tread
+                double treadAngleRad = parameters.TreadAngle * Math.PI / 180;
+                double startAngle = parameters.NumTreads * treadAngleRad * (parameters.IsClockwise ? 1 : -1);
+
+                // Create a simple rectangular tread (without arc cutout for now)
+                Solid3d tread = new Solid3d();
+                try
+                {
+                    // Create a rectangular Solid3d using CreateBox
+                    tread.CreateBox(outerRadius, treadLength, treadThickness);
+                    doc.Editor.WriteMessage("\nSuccessfully created tread box.");
+
+                    // Position the box so the bottom-left corner is at (0, 0, 0)
+                    // CreateBox centers the box at (0, 0, 0), so we need to shift it
+                    tread.TransformBy(Matrix3d.Displacement(new Vector3d(outerRadius / 2, treadLength / 2, 0)));
+                    doc.Editor.WriteMessage("\nSuccessfully positioned tread.");
+
+                    // Validate the resulting geometry
+                    if (tread == null || tread.Bounds == null)
                     {
-                        int segments = 10;
-                        double angleStep = (endAngle - startAngle) / segments;
-                        for (int j = 0; j <= segments; j++)
-                        {
-                            double angle = startAngle + j * angleStep;
-                            innerPoly.AddVertexAt(j, new Point2d(innerRadius * Math.Cos(angle), innerRadius * Math.Sin(angle)), 0, 0, 0);
-                            outerPoly.AddVertexAt(j, new Point2d(outerRadius * Math.Cos(angle), outerRadius * Math.Sin(angle)), 0, 0, 0);
-                        }
-
-                        // Create lines to close the sector
-                        using (Line startLine = new Line(
-                            new Point3d(innerRadius * Math.Cos(startAngle), innerRadius * Math.Sin(startAngle), 0),
-                            new Point3d(outerRadius * Math.Cos(startAngle), outerRadius * Math.Sin(startAngle), 0)))
-                        using (Line endLine = new Line(
-                            new Point3d(outerRadius * Math.Cos(endAngle), outerRadius * Math.Sin(endAngle), 0),
-                            new Point3d(innerRadius * Math.Cos(endAngle), innerRadius * Math.Sin(endAngle), 0)))
-                        {
-                            // Create region from the closed boundary
-                            DBObjectCollection boundary = new DBObjectCollection { innerPoly, outerPoly, startLine, endLine };
-                            using (DBObjectCollection regions = Region.CreateFromCurves(boundary))
-                            {
-                                Region region = regions[0] as Region;
-
-                                // Extrude into a tread
-                                using (Solid3d tread = new Solid3d())
-                                {
-                                    tread.CreateExtrudedSolid(region, new Vector3d(0, 0, treadThickness), new SweepOptions());
-                                    tread.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height)));
-
-                                    btr.AppendEntity(tread);
-                                    tr.AddNewlyCreatedDBObject(tread, true);
-
-                                    treads[0] = tread;
-                                    tread.DowngradeOpen();
-                                }
-                            }
-                        }
+                        throw new InvalidOperationException("Tread geometry is invalid after creation.");
                     }
+                    doc.Editor.WriteMessage("\nTread geometry validated successfully.");
+
+                    // Apply transformations
+                    tread.TransformBy(Matrix3d.Rotation(startAngle, Vector3d.ZAxis, Point3d.Origin));
+                    doc.Editor.WriteMessage("\nSuccessfully applied rotation transformation to tread.");
+                    tread.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height)));
+                    doc.Editor.WriteMessage("\nSuccessfully applied height displacement transformation to tread.");
+
+                    btr.AppendEntity(tread);
+                    doc.Editor.WriteMessage("\nSuccessfully appended tread to BlockTableRecord.");
+                    tr.AddNewlyCreatedDBObject(tread, true);
+                    doc.Editor.WriteMessage("\nSuccessfully added tread to transaction.");
+
+                    treads[0] = tread;
+                    tread.DowngradeOpen();
+                    doc.Editor.WriteMessage("\nSuccessfully downgraded tread open state.");
+                }
+                catch (Exception ex)
+                {
+                    doc.Editor.WriteMessage($"\nFailed to create tread: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                    treads[0] = null; // Ensure treads[0] is explicitly null if creation fails
+                    throw;
+                }
+                finally
+                {
+                    tread?.Dispose();
                 }
 
                 tr.Commit();
-            }
+                doc.Editor.WriteMessage("\nSuccessfully committed transaction for tread.");
 
-            return treads;
+                return treads;
+            }
         }
     }
 }

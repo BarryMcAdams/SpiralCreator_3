@@ -16,7 +16,6 @@ namespace SpiralStairPlugin
 
                 double innerRadius = parameters.CenterPoleDia / 2; // For the arc cutout
                 double outerRadius = parameters.OutsideDia / 2;    // Full width from center to outside
-                double landingLength = 50.0;                       // Long side of rectangle
                 double landingThickness = 0.25;                    // Consistent with treads
                 double treadAngleRad = parameters.TreadAngle * Math.PI / 180;
 
@@ -25,54 +24,49 @@ namespace SpiralStairPlugin
                 int midStep = totalSteps / 2; // Place mid-landing after this step
                 double height = midStep * parameters.RiserHeight; // Z position of mid-landing
                 double landingStartAngle = midStep * treadAngleRad * (parameters.IsClockwise ? 1 : -1);
-                double landingEndAngle = landingStartAngle + treadAngleRad * (parameters.IsClockwise ? 1 : -1);
+                double landingEndAngle = landingStartAngle + (Math.PI / 2) * (parameters.IsClockwise ? 1 : -1); // Span 90°
 
-                // Create the outer rectangle (aligned along X-axis initially, short edge radial)
-                using (Polyline outerRect = new Polyline())
+                // Create inner and outer arcs for the landing
+                using (CircularArc3d innerArc = new CircularArc3d(
+                    Point3d.Origin, Vector3d.ZAxis, Vector3d.XAxis, innerRadius, landingStartAngle, landingEndAngle))
+                using (CircularArc3d outerArc = new CircularArc3d(
+                    Point3d.Origin, Vector3d.ZAxis, Vector3d.XAxis, outerRadius, landingStartAngle, landingEndAngle))
                 {
-                    outerRect.AddVertexAt(0, new Point2d(0, 0), 0, 0, 0);                    // Bottom-left (at pole center)
-                    outerRect.AddVertexAt(1, new Point2d(outerRadius, 0), 0, 0, 0);          // Bottom-right
-                    outerRect.AddVertexAt(2, new Point2d(outerRadius, landingLength), 0, 0, 0); // Top-right
-                    outerRect.AddVertexAt(3, new Point2d(0, landingLength), 0, 0, 0);        // Top-left
-                    outerRect.Closed = true;
-
-                    // Create the inner arc to cut out the center pole
-                    using (CircularArc3d innerArc = new CircularArc3d(
-                        Point3d.Origin, Vector3d.ZAxis, Vector3d.XAxis, innerRadius, landingStartAngle, landingEndAngle))
+                    // Convert arcs to Polyline
+                    using (Polyline innerPoly = new Polyline())
+                    using (Polyline outerPoly = new Polyline())
                     {
-                        // Approximate the arc with a Polyline
-                        using (Polyline innerPoly = new Polyline())
+                        int segments = 10;
+                        double angleStep = (landingEndAngle - landingStartAngle) / segments;
+                        for (int j = 0; j <= segments; j++)
                         {
-                            int segments = 10;
-                            double angleStep = (landingEndAngle - landingStartAngle) / segments;
-                            for (int j = 0; j <= segments; j++)
-                            {
-                                double angle = landingStartAngle + j * angleStep;
-                                innerPoly.AddVertexAt(j, new Point2d(innerRadius * Math.Cos(angle), innerRadius * Math.Sin(angle)), 0, 0, 0);
-                            }
-                            innerPoly.Closed = true;
+                            double angle = landingStartAngle + j * angleStep;
+                            innerPoly.AddVertexAt(j, new Point2d(innerRadius * Math.Cos(angle), innerRadius * Math.Sin(angle)), 0, 0, 0);
+                            outerPoly.AddVertexAt(j, new Point2d(outerRadius * Math.Cos(angle), outerRadius * Math.Sin(angle)), 0, 0, 0);
+                        }
 
-                            // Create regions and subtract the arc from the rectangle
-                            DBObjectCollection outerBoundary = new DBObjectCollection { outerRect };
-                            DBObjectCollection innerBoundary = new DBObjectCollection { innerPoly };
-                            using (DBObjectCollection outerRegions = Region.CreateFromCurves(outerBoundary))
-                            using (DBObjectCollection innerRegions = Region.CreateFromCurves(innerBoundary))
+                        // Create lines to close the sector
+                        using (Line startLine = new Line(
+                            new Point3d(innerRadius * Math.Cos(landingStartAngle), innerRadius * Math.Sin(landingStartAngle), 0),
+                            new Point3d(outerRadius * Math.Cos(landingStartAngle), outerRadius * Math.Sin(landingStartAngle), 0)))
+                        using (Line endLine = new Line(
+                            new Point3d(outerRadius * Math.Cos(landingEndAngle), outerRadius * Math.Sin(landingEndAngle), 0),
+                            new Point3d(innerRadius * Math.Cos(landingEndAngle), innerRadius * Math.Sin(landingEndAngle), 0)))
+                        {
+                            // Create region
+                            DBObjectCollection boundary = new DBObjectCollection { innerPoly, outerPoly, startLine, endLine };
+                            using (DBObjectCollection regions = Region.CreateFromCurves(boundary))
                             {
-                                Region outerRegion = outerRegions[0] as Region;
-                                Region innerRegion = innerRegions[0] as Region;
-
-                                outerRegion.BooleanOperation(BooleanOperationType.BoolSubtract, innerRegion);
+                                Region region = regions[0] as Region;
 
                                 // Extrude into a landing
                                 using (Solid3d landing = new Solid3d())
                                 {
-                                    landing.CreateExtrudedSolid(outerRegion, new Vector3d(0, 0, landingThickness), new SweepOptions());
-
-                                    // Rotate to match the tread's angle at this position
-                                    landing.TransformBy(Matrix3d.Rotation(landingStartAngle, Vector3d.ZAxis, Point3d.Origin));
-
-                                    // Move to the mid-landing height
+                                    landing.CreateExtrudedSolid(region, new Vector3d(0, 0, landingThickness), new SweepOptions());
                                     landing.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height)));
+
+                                    // Set color to green (RGB: 0, 255, 0)
+                                    landing.ColorIndex = 3; // AutoCAD color index for green
 
                                     btr.AppendEntity(landing);
                                     tr.AddNewlyCreatedDBObject(landing, true);

@@ -28,6 +28,9 @@ namespace SpiralStairPlugin
                         pole.CreateExtrudedSolid(region, new Vector3d(0, 0, parameters.OverallHeight), new SweepOptions());
                         // No displacement - bottom stays at Z=0
 
+                        // Set color to darker grey (AutoCAD color index 251)
+                        pole.ColorIndex = 251;
+
                         btr.AppendEntity(pole);
                         tr.AddNewlyCreatedDBObject(pole, true);
 
