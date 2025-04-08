@@ -47,13 +47,13 @@ namespace SpiralStairPlugin
                     }
 
                     EntityCollection entities = new EntityCollection();
-                    // Create all treads except the top one
-                    IGeometry[] treadCreators = new IGeometry[] { new CenterPole(), new Tread() };
+                    // Create center pole and 15 treads
+                    IGeometry[] creators = new IGeometry[] { new CenterPole(), new Tread() };
                     ed.WriteMessage("\nStarting geometry creation...");
-                    for (int i = 0; i < treadCreators.Length; i++)
+                    for (int i = 0; i < creators.Length; i++)
                     {
-                        ed.WriteMessage($"\nCreating geometry {i + 1} of {treadCreators.Length + 1}...");
-                        Entity[] geometry = treadCreators[i].Create(doc, parameters);
+                        ed.WriteMessage($"\nCreating geometry {i + 1} of {creators.Length + 1}...");
+                        Entity[] geometry = creators[i].Create(doc, parameters);
                         ed.WriteMessage($"\nGeometry {i + 1} created with {geometry.Length} entities.");
                         for (int j = 0; j < geometry.Length; j++)
                         {
@@ -61,7 +61,7 @@ namespace SpiralStairPlugin
                         }
                     }
 
-                    // Add the top landing as the final "tread"
+                    // Add the top landing as the 16th "tread"
                     ed.WriteMessage("\nCreating top landing...");
                     IGeometry topLanding = new TopLanding();
                     Entity[] landingGeometry = topLanding.Create(doc, parameters);

@@ -23,13 +23,13 @@ namespace SpiralStairPlugin
                 double landingStartAngle = parameters.NumTreads * treadAngleRad * (parameters.IsClockwise ? 1 : -1);
                 double landingEndAngle = landingStartAngle + treadAngleRad * (parameters.IsClockwise ? 1 : -1);
 
-                // Create the outer rectangle (aligned along X-axis initially, long edge perpendicular to radius)
+                // Create the outer rectangle (aligned along X-axis initially, short edge radial, from 0 to outerRadius)
                 using (Polyline outerRect = new Polyline())
                 {
-                    outerRect.AddVertexAt(0, new Point2d(innerRadius, -landingLength / 2), 0, 0, 0); // Bottom-left
-                    outerRect.AddVertexAt(1, new Point2d(outerRadius, -landingLength / 2), 0, 0, 0);  // Bottom-right
-                    outerRect.AddVertexAt(2, new Point2d(outerRadius, landingLength / 2), 0, 0, 0);   // Top-right
-                    outerRect.AddVertexAt(3, new Point2d(innerRadius, landingLength / 2), 0, 0, 0);   // Top-left
+                    outerRect.AddVertexAt(0, new Point2d(0, 0), 0, 0, 0);                    // Bottom-left (at pole center)
+                    outerRect.AddVertexAt(1, new Point2d(outerRadius, 0), 0, 0, 0);          // Bottom-right
+                    outerRect.AddVertexAt(2, new Point2d(outerRadius, landingLength), 0, 0, 0); // Top-right
+                    outerRect.AddVertexAt(3, new Point2d(0, landingLength), 0, 0, 0);        // Top-left
                     outerRect.Closed = true;
 
                     // Create the inner arc to cut out the center pole
@@ -64,9 +64,8 @@ namespace SpiralStairPlugin
                                 {
                                     landing.CreateExtrudedSolid(outerRegion, new Vector3d(0, 0, landingThickness), new SweepOptions());
 
-                                    // Rotate to match the 16th tread's start angle, then adjust to make long edge tangential
-                                    double finalAngle = landingStartAngle + (parameters.IsClockwise ? Math.PI / 2 : -Math.PI / 2);
-                                    landing.TransformBy(Matrix3d.Rotation(finalAngle, Vector3d.ZAxis, Point3d.Origin));
+                                    // Rotate to match the 16th tread's start angle (no additional rotation)
+                                    landing.TransformBy(Matrix3d.Rotation(landingStartAngle, Vector3d.ZAxis, Point3d.Origin));
 
                                     // Move so top is at OverallHeight
                                     landing.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height)));
