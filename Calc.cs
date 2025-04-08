@@ -6,7 +6,7 @@ namespace SpiralStairPlugin
     {
         public StairParameters Calculate(ValidatedStairInput input)
         {
-            // 16 total steps (15 treads + 1 landing), riser height = OverallHeight / total steps
+            // Calculate total steps (treads + landing) with riser height <= 9.5"
             int totalSteps = (int)Math.Ceiling(input.OverallHeight / 9.5); // 16 with 144"
             int numTreads = totalSteps - 1; // 15 treads, landing is the 16th
             double riserHeight = input.OverallHeight / totalSteps;
