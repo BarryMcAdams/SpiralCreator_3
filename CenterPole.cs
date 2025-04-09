@@ -46,6 +46,10 @@ namespace SpiralStairPlugin
                 }
                 doc.Editor.WriteMessage("\nCenter pole geometry validated successfully.");
 
+                // Translate the center pole so its bottom is at Z=0
+                centerPole.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height / 2)));
+                doc.Editor.WriteMessage("\nSuccessfully positioned center pole with bottom at Z=0.");
+
                 btr.AppendEntity(centerPole);
                 doc.Editor.WriteMessage("\nSuccessfully appended center pole to BlockTableRecord.");
                 tr.AddNewlyCreatedDBObject(centerPole, true);
@@ -60,10 +64,6 @@ namespace SpiralStairPlugin
                 doc.Editor.WriteMessage($"\nFailed to create center pole: {ex.Message}\nStackTrace: {ex.StackTrace}");
                 pole[0] = null;
                 throw;
-            }
-            finally
-            {
-                centerPole?.Dispose();
             }
 
             return pole;

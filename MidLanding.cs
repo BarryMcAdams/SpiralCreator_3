@@ -71,10 +71,6 @@ namespace SpiralStairPlugin
                 landing[0] = null;
                 throw;
             }
-            finally
-            {
-                midLanding?.Dispose();
-            }
 
             return landing;
         }

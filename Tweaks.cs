@@ -8,6 +8,11 @@ namespace SpiralStairPlugin
     {
         public EntityCollection ApplyTweaks(Document doc, EntityCollection entities, ValidatedStairInput validInput, StairParameters parameters)
         {
+            if (doc == null || doc.Database == null)
+            {
+                return entities;
+            }
+
             using (Transaction tr = doc.Database.TransactionManager.StartTransaction())
             {
                 // Open the LayerTable for write
@@ -36,7 +41,7 @@ namespace SpiralStairPlugin
                 if (entities != null && entities.Count > 0)
                 {
                     Entity topLanding = entities[entities.Count - 1];
-                    if (topLanding != null)
+                    if (topLanding != null && !topLanding.IsDisposed && topLanding.IsWriteEnabled == false)
                     {
                         topLanding.UpgradeOpen();
                         topLanding.Layer = layerName;
@@ -45,7 +50,7 @@ namespace SpiralStairPlugin
                     }
                     else
                     {
-                        doc.Editor.WriteMessage("\nWarning: Top landing entity is null.");
+                        doc.Editor.WriteMessage("\nWarning: Top landing entity is null, disposed, or not readable and cannot be assigned to layer.");
                     }
                 }
                 else

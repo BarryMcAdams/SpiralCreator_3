@@ -81,10 +81,6 @@ namespace SpiralStairPlugin
                 treads[0] = null; // Ensure treads[0] is explicitly null if creation fails
                 throw;
             }
-            finally
-            {
-                landing?.Dispose();
-            }
 
             return treads;
         }
