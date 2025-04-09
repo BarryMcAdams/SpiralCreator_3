@@ -4,23 +4,20 @@
     {
         public ValidatedStairInput Validate(StairInput input)
         {
-            if (input.CenterPoleDia <= 0 || input.OverallHeight <= 0 || input.OutsideDia <= 0 || input.RotationDeg <= 0)
-                return null;
-
-            if (input.OutsideDia <= input.CenterPoleDia)
-                return null;
-
-            if (input.RotationDeg > 3600)
-                return null;
-
-            return new ValidatedStairInput
+            if (input.CenterPoleDia <= 0 || input.OverallHeight <= 0 || input.OutsideDia <= 0)
             {
-                CenterPoleDia = input.CenterPoleDia,
-                OverallHeight = input.OverallHeight,
-                OutsideDia = input.OutsideDia,
-                RotationDeg = input.RotationDeg,
-                IsClockwise = input.IsClockwise
-            };
+                return null;
+            }
+
+            if (input.CenterPoleDia >= input.OutsideDia)
+            {
+                return null;
+            }
+
+            // Determine if the rotation is clockwise based on RotationDeg
+            bool isClockwise = input.RotationDeg >= 0;
+
+            return new ValidatedStairInput(input.CenterPoleDia, input.OverallHeight, input.OutsideDia, input.RotationDeg, input.MidLandingAfterTread, isClockwise);
         }
     }
 }

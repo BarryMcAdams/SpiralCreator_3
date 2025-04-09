@@ -38,12 +38,82 @@ namespace SpiralStairPlugin
             double treadAngleRad = parameters.TreadAngle * Math.PI / 180;
             double startAngle = parameters.NumTreads * treadAngleRad * (parameters.IsClockwise ? 1 : -1);
             double midLandingAngle = Math.PI / 2; // 90° span
+            double endAngle = startAngle + midLandingAngle * (parameters.IsClockwise ? 1 : -1);
 
             Solid3d midLanding = new Solid3d();
             try
             {
-                midLanding.CreateFrustum(landingThickness, outerRadius, outerRadius, outerRadius);
-                doc.Editor.WriteMessage("\nSuccessfully created mid-landing.");
+                using (CircularArc3d innerArc = new CircularArc3d(
+                    Point3d.Origin, Vector3d.ZAxis, Vector3d.XAxis, innerRadius, startAngle, endAngle))
+                using (CircularArc3d outerArc = new CircularArc3d(
+                    Point3d.Origin, Vector3d.ZAxis, Vector3d.XAxis, outerRadius, startAngle, endAngle))
+                {
+                    // Convert arcs to Polyline for region creation
+                    using (Polyline innerPoly = new Polyline())
+                    using (Polyline outerPoly = new Polyline())
+                    {
+                        int segments = 10;
+                        double angleStep = (endAngle - startAngle) / segments;
+                        for (int j = 0; j <= segments; j++)
+                        {
+                            double angle = startAngle + j * angleStep;
+                            innerPoly.AddVertexAt(j, new Point2d(innerRadius * Math.Cos(angle), innerRadius * Math.Sin(angle)), 0, 0, 0);
+                            outerPoly.AddVertexAt(j, new Point2d(outerRadius * Math.Cos(angle), outerRadius * Math.Sin(angle)), 0, 0, 0);
+                        }
+
+                        // Add the polylines to the database
+                        btr.AppendEntity(innerPoly);
+                        tr.AddNewlyCreatedDBObject(innerPoly, true);
+                        btr.AppendEntity(outerPoly);
+                        tr.AddNewlyCreatedDBObject(outerPoly, true);
+
+                        // Create lines to close the sector
+                        using (Line startLine = new Line(
+                            new Point3d(innerRadius * Math.Cos(startAngle), innerRadius * Math.Sin(startAngle), 0),
+                            new Point3d(outerRadius * Math.Cos(startAngle), outerRadius * Math.Sin(startAngle), 0)))
+                        using (Line endLine = new Line(
+                            new Point3d(outerRadius * Math.Cos(endAngle), outerRadius * Math.Sin(endAngle), 0),
+                            new Point3d(innerRadius * Math.Cos(endAngle), innerRadius * Math.Sin(endAngle), 0)))
+                        {
+                            // Add the lines to the database
+                            btr.AppendEntity(startLine);
+                            tr.AddNewlyCreatedDBObject(startLine, true);
+                            btr.AppendEntity(endLine);
+                            tr.AddNewlyCreatedDBObject(endLine, true);
+
+                            // Create region from the closed boundary
+                            DBObjectCollection boundary = new DBObjectCollection { innerPoly, outerPoly, startLine, endLine };
+                            using (DBObjectCollection regions = Region.CreateFromCurves(boundary))
+                            {
+                                if (regions == null || regions.Count == 0)
+                                {
+                                    doc.Editor.WriteMessage("\nFailed to create region for mid-landing polyline.");
+                                    throw new InvalidOperationException("Failed to create region for mid-landing polyline.");
+                                }
+
+                                using (Region region = regions[0] as Region)
+                                {
+                                    if (region == null)
+                                    {
+                                        doc.Editor.WriteMessage("\nRegion creation failed for mid-landing polyline.");
+                                        throw new InvalidOperationException("Region creation failed for mid-landing polyline.");
+                                    }
+
+                                    // Create the mid-landing by extruding the region
+                                    midLanding.CreateExtrudedSolid(region, new Vector3d(0, 0, landingThickness), new SweepOptions());
+                                    doc.Editor.WriteMessage("\nSuccessfully created mid-landing solid.");
+                                }
+                            }
+
+                            // Clean up temporary entities
+                            startLine.Erase();
+                            endLine.Erase();
+                        }
+
+                        innerPoly.Erase();
+                        outerPoly.Erase();
+                    }
+                }
 
                 if (midLanding == null || midLanding.Bounds == null)
                 {

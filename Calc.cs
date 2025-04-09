@@ -1,4 +1,6 @@
 ﻿using System;
+using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.EditorInput;
 
 namespace SpiralStairPlugin
 {
@@ -6,36 +8,62 @@ namespace SpiralStairPlugin
     {
         public StairParameters Calculate(ValidatedStairInput input)
         {
-            // Calculate total steps (treads + landing) with riser height <= 9.5"
-            int totalSteps = (int)Math.Ceiling(input.OverallHeight / 9.5); // 16 with 144"
-            int numTreads = totalSteps - 1; // 15 treads, landing is the 16th
-            double riserHeight = input.OverallHeight / totalSteps;
-            double treadAngle = input.RotationDeg / numTreads; // Rotation over 15 treads
-
-            return new StairParameters
+            try
             {
-                CenterPoleDia = input.CenterPoleDia,
-                OverallHeight = input.OverallHeight,
-                OutsideDia = input.OutsideDia,
-                RotationDeg = input.RotationDeg,
-                IsClockwise = input.IsClockwise,
-                RiserHeight = riserHeight,
-                TreadAngle = treadAngle,
-                NumTreads = numTreads
-            };
-        }
+                // Initial calculation of riser height and number of treads
+                double riserHeight = input.OverallHeight / (Math.Floor((input.OverallHeight - 9.0) / 9.0) + 1);
+                int numTreads = (int)Math.Floor((input.OverallHeight - riserHeight) / riserHeight);
+                double treadAngle = input.RotationDeg / numTreads;
 
-        public ComplianceRetryOption HandleComplianceFailure(StairParameters parameters)
-        {
-            if (parameters.RiserHeight > 9.5)
-            {
-                return new ComplianceRetryOption
+                // Adjust the number of treads if a mid-landing is needed (height > 151")
+                if (input.OverallHeight > 151)
                 {
-                    ShouldRetry = true,
-                    Message = "Riser height must not exceed 9.5 inches."
+                    // Mid-landing replaces one tread, so reduce the tread count by 1
+                    numTreads--;
+                    // Recalculate riser height with the adjusted number of steps (treads + mid-landing + top landing)
+                    riserHeight = input.OverallHeight / (numTreads + 1 + 1); // +1 for mid-landing, +1 for top landing
+                    treadAngle = input.RotationDeg / numTreads;
+                }
+
+                return new StairParameters
+                {
+                    CenterPoleDia = input.CenterPoleDia,
+                    OverallHeight = input.OverallHeight,
+                    OutsideDia = input.OutsideDia,
+                    RotationDeg = input.RotationDeg,
+                    IsClockwise = input.IsClockwise,
+                    RiserHeight = riserHeight,
+                    TreadAngle = treadAngle,
+                    NumTreads = numTreads
                 };
             }
-            return new ComplianceRetryOption { ShouldRetry = false };
+            catch
+            {
+                return null;
+            }
+        }
+
+        public void HandleComplianceFailure(StairParameters parameters)
+        {
+            Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+            Editor ed = doc.Editor;
+
+            // Basic compliance checks (e.g., IBC R311.7.10.1)
+            // Riser height should be between 4" and 7.75"
+            if (parameters.RiserHeight < 4.0 || parameters.RiserHeight > 7.75)
+            {
+                ed.WriteMessage($"\nCompliance Warning: Riser height ({parameters.RiserHeight:F2} inches) is outside the allowed range (4 to 7.75 inches).");
+            }
+
+            // Clear width (tread width) should be at least 26" (outside diameter - center pole diameter)
+            double clearWidth = (parameters.OutsideDia - parameters.CenterPoleDia) / 2;
+            if (clearWidth < 26.0)
+            {
+                ed.WriteMessage($"\nCompliance Warning: Clear width ({clearWidth:F2} inches) is less than the minimum required (26 inches).");
+            }
+
+            // Additional compliance checks can be added here (e.g., tread depth, headroom)
+            // For now, just log the warnings; user interaction can be added later if needed
         }
     }
 }

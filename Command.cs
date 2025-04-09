@@ -47,6 +47,29 @@ namespace SpiralStairPlugin
                         return;
                     }
 
+                    // Check for compliance issues
+                    calc.HandleComplianceFailure(parameters);
+
+                    // Allow the user to adjust their input based on calculated parameters
+                    StairInput adjustedInput = input.GetAdjustedInput(doc, validInput, parameters);
+                    if (adjustedInput != null)
+                    {
+                        validInput = validation.Validate(adjustedInput);
+                        if (validInput == null)
+                        {
+                            input.ShowRetryPrompt("Invalid adjusted inputs. Values must be positive and within range.");
+                            return;
+                        }
+                        parameters = calc.Calculate(validInput);
+                        if (parameters == null)
+                        {
+                            ed.WriteMessage("\nCalculation failed for adjusted inputs. Check input values.");
+                            return;
+                        }
+                        // Check for compliance issues again after adjustment
+                        calc.HandleComplianceFailure(parameters);
+                    }
+
                     EntityCollection entities = new EntityCollection();
                     // Create center pole
                     IGeometry centerPole = new CenterPole();
@@ -66,8 +89,13 @@ namespace SpiralStairPlugin
 
                     // Check if mid-landing is needed (height > 151")
                     bool needsMidLanding = parameters.OverallHeight > 151;
-                    int totalSteps = parameters.NumTreads + 1; // Treads + top landing
-                    int midStep = totalSteps / 2; // Midpoint for mid-landing
+                    int totalSteps = parameters.NumTreads + 1; // Treads + top landing (mid-landing replaces a tread)
+                    int midStep = validInput.MidLandingAfterTread.HasValue ? validInput.MidLandingAfterTread.Value : totalSteps / 2; // Use user input or default to midpoint
+                    if (needsMidLanding && (midStep <= 0 || midStep >= parameters.NumTreads))
+                    {
+                        midStep = totalSteps / 2; // Fallback to default if user input is invalid
+                        ed.WriteMessage($"\nInvalid mid-landing position. Using default position after tread {midStep}.");
+                    }
                     int treadsBeforeMid = needsMidLanding ? midStep : parameters.NumTreads;
                     int treadsAfterMid = needsMidLanding ? parameters.NumTreads - midStep : 0;
                     double treadAngleRad = parameters.TreadAngle * Math.PI / 180;
@@ -103,7 +131,7 @@ namespace SpiralStairPlugin
                         }
                     }
 
-                    // Create mid-landing if needed
+                    // Create mid-landing if needed (replaces the tread at midStep)
                     if (needsMidLanding)
                     {
                         ed.WriteMessage("\nCreating mid-landing...");
@@ -117,7 +145,7 @@ namespace SpiralStairPlugin
                             IsClockwise = parameters.IsClockwise,
                             RiserHeight = parameters.RiserHeight,
                             TreadAngle = parameters.TreadAngle,
-                            NumTreads = midStep
+                            NumTreads = treadsBeforeMid // Position at the mid-landing step
                         };
                         Entity[] midGeometry = midLanding.Create(doc, tr, midParams);
                         for (int j = 0; j < midGeometry.Length; j++)
@@ -134,12 +162,16 @@ namespace SpiralStairPlugin
 
                         // Create treads after mid-landing, adjusting for mid-landing's 90° span
                         ed.WriteMessage("\nCreating treads after mid-landing...");
-                        for (int i = midStep; i < parameters.NumTreads; i++)
+                        for (int i = 0; i < treadsAfterMid; i++)
                         {
                             double angleOffset = midLandingAngle * (parameters.IsClockwise ? 1 : -1);
-                            double adjustedStartAngle = (midStep * treadAngleRad + angleOffset) * (parameters.IsClockwise ? 1 : -1);
-                            double remainingRotation = (parameters.NumTreads - midStep) * treadAngleRad;
-                            double newTreadAngle = remainingRotation / (parameters.NumTreads - midStep) * 180 / Math.PI;
+                            double adjustedStartAngle = (treadsBeforeMid * treadAngleRad + angleOffset) * (parameters.IsClockwise ? 1 : -1);
+                            double remainingRotation = (parameters.NumTreads - treadsBeforeMid) * treadAngleRad;
+                            double newTreadAngle = remainingRotation / (parameters.NumTreads - treadsBeforeMid) * 180 / Math.PI;
+
+                            // Calculate the height relative to the top landing
+                            int treadIndexFromBottom = treadsBeforeMid + i + 1; // +1 because mid-landing replaces a tread
+                            double treadHeight = treadIndexFromBottom * parameters.RiserHeight;
 
                             StairParameters treadParams = new StairParameters
                             {
@@ -150,7 +182,7 @@ namespace SpiralStairPlugin
                                 IsClockwise = parameters.IsClockwise,
                                 RiserHeight = parameters.RiserHeight,
                                 TreadAngle = newTreadAngle,
-                                NumTreads = i - midStep
+                                NumTreads = treadsBeforeMid + i // Continue the tread numbering
                             };
                             Entity[] treadGeometry = treadCreator.Create(doc, tr, treadParams);
                             for (int j = 0; j < treadGeometry.Length; j++)

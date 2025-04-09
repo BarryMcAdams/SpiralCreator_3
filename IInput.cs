@@ -5,7 +5,7 @@ namespace SpiralStairPlugin
     public interface IInput
     {
         StairInput GetInput(Document doc);
-        void ShowRetryPrompt(string errorMessage);
-        StairInput GetAdjustedInput(Document doc, StairParameters parameters);
+        StairInput GetAdjustedInput(Document doc, ValidatedStairInput validInput, StairParameters parameters);
+        void ShowRetryPrompt(string message);
     }
 }
