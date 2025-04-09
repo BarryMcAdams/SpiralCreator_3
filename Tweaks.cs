@@ -1,6 +1,7 @@
 ﻿using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
+using System; // Added to resolve Exception type
 
 namespace SpiralStairPlugin
 {
@@ -37,25 +38,25 @@ namespace SpiralStairPlugin
                     doc.Editor.WriteMessage($"\nCreated layer '{layerName}' with color RGB(0, 255, 255).");
                 }
 
-                // The top landing is the last entity in the EntityCollection (as per Command.cs)
-                if (entities != null && entities.Count > 0)
+                // Find the top landing by type
+                Entity topLanding = entities.GetByType("TopLanding");
+                if (topLanding != null)
                 {
-                    Entity topLanding = entities[entities.Count - 1];
-                    if (topLanding != null && !topLanding.IsDisposed && topLanding.IsWriteEnabled == false)
+                    try
                     {
                         topLanding.UpgradeOpen();
                         topLanding.Layer = layerName;
                         topLanding.DowngradeOpen();
                         doc.Editor.WriteMessage($"\nAssigned top landing to layer '{layerName}'.");
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        doc.Editor.WriteMessage("\nWarning: Top landing entity is null, disposed, or not readable and cannot be assigned to layer.");
+                        doc.Editor.WriteMessage($"\nFailed to assign top landing to layer '{layerName}': {ex.Message}\nStackTrace: {ex.StackTrace}");
                     }
                 }
                 else
                 {
-                    doc.Editor.WriteMessage("\nWarning: EntityCollection is empty or null.");
+                    doc.Editor.WriteMessage("\nWarning: No top landing entity found in EntityCollection.");
                 }
 
                 tr.Commit();

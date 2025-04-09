@@ -54,13 +54,13 @@ namespace SpiralStairPlugin
                     Entity[] poleGeometry = centerPole.Create(doc, tr, parameters);
                     for (int j = 0; j < poleGeometry.Length; j++)
                     {
-                        if (poleGeometry[j] != null && !poleGeometry[j].IsDisposed)
+                        if (poleGeometry[j] != null)
                         {
-                            entities.Add(poleGeometry[j]);
+                            entities.Add("CenterPole", poleGeometry[j]);
                         }
                         else
                         {
-                            ed.WriteMessage($"\nWarning: poleGeometry[{j}] is null or disposed and will be skipped.");
+                            ed.WriteMessage($"\nWarning: poleGeometry[{j}] is null and will be skipped.");
                         }
                     }
 
@@ -92,13 +92,13 @@ namespace SpiralStairPlugin
                         Entity[] treadGeometry = treadCreator.Create(doc, tr, treadParams);
                         for (int j = 0; j < treadGeometry.Length; j++)
                         {
-                            if (treadGeometry[j] != null && !treadGeometry[j].IsDisposed)
+                            if (treadGeometry[j] != null)
                             {
-                                entities.Add(treadGeometry[j]);
+                                entities.Add("Tread", treadGeometry[j]);
                             }
                             else
                             {
-                                ed.WriteMessage($"\nWarning: treadGeometry[{j}] (tread {i}) is null or disposed and will be skipped.");
+                                ed.WriteMessage($"\nWarning: treadGeometry[{j}] (tread {i}) is null and will be skipped.");
                             }
                         }
                     }
@@ -122,13 +122,13 @@ namespace SpiralStairPlugin
                         Entity[] midGeometry = midLanding.Create(doc, tr, midParams);
                         for (int j = 0; j < midGeometry.Length; j++)
                         {
-                            if (midGeometry[j] != null && !midGeometry[j].IsDisposed)
+                            if (midGeometry[j] != null)
                             {
-                                entities.Add(midGeometry[j]);
+                                entities.Add("MidLanding", midGeometry[j]);
                             }
                             else
                             {
-                                ed.WriteMessage($"\nWarning: midGeometry[{j}] is null or disposed and will be skipped.");
+                                ed.WriteMessage($"\nWarning: midGeometry[{j}] is null and will be skipped.");
                             }
                         }
 
@@ -155,15 +155,15 @@ namespace SpiralStairPlugin
                             Entity[] treadGeometry = treadCreator.Create(doc, tr, treadParams);
                             for (int j = 0; j < treadGeometry.Length; j++)
                             {
-                                if (treadGeometry[j] != null && !treadGeometry[j].IsDisposed)
+                                if (treadGeometry[j] != null)
                                 {
                                     // Adjust the tread's rotation to account for the mid-landing's 90°
                                     treadGeometry[j].TransformBy(Matrix3d.Rotation(angleOffset, Vector3d.ZAxis, Point3d.Origin));
-                                    entities.Add(treadGeometry[j]);
+                                    entities.Add("Tread", treadGeometry[j]);
                                 }
                                 else
                                 {
-                                    ed.WriteMessage($"\nWarning: treadGeometry[{j}] (tread {i}) is null or disposed and will be skipped.");
+                                    ed.WriteMessage($"\nWarning: treadGeometry[{j}] (tread {i}) is null and will be skipped.");
                                 }
                             }
                         }
@@ -175,13 +175,13 @@ namespace SpiralStairPlugin
                     Entity[] landingGeometry = topLanding.Create(doc, tr, parameters);
                     for (int j = 0; j < landingGeometry.Length; j++)
                     {
-                        if (landingGeometry[j] != null && !landingGeometry[j].IsDisposed)
+                        if (landingGeometry[j] != null)
                         {
-                            entities.Add(landingGeometry[j]);
+                            entities.Add("TopLanding", landingGeometry[j]);
                         }
                         else
                         {
-                            ed.WriteMessage($"\nWarning: landingGeometry[{j}] is null or disposed and will be skipped.");
+                            ed.WriteMessage($"\nWarning: landingGeometry[{j}] is null and will be skipped.");
                         }
                     }
                     ed.WriteMessage("\nAll geometry created.");

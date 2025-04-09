@@ -1,20 +1,16 @@
 ﻿using Autodesk.AutoCAD.DatabaseServices;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SpiralStairPlugin
 {
     public class EntityCollection
     {
-        private List<Entity> entities;
+        private List<(string Type, Entity Entity)> entities = new List<(string, Entity)>();
 
-        public EntityCollection()
+        public void Add(string type, Entity entity)
         {
-            entities = new List<Entity>();
-        }
-
-        public void Add(Entity entity)
-        {
-            entities.Add(entity);
+            entities.Add((type, entity));
         }
 
         public int Count
@@ -22,9 +18,19 @@ namespace SpiralStairPlugin
             get { return entities.Count; }
         }
 
-        public Entity this[int index]
+        public Entity GetByType(string type)
         {
-            get { return entities[index]; }
+            return entities.LastOrDefault(e => e.Type == type).Entity;
+        }
+
+        public IEnumerable<Entity> GetAllByType(string type)
+        {
+            return entities.Where(e => e.Type == type).Select(e => e.Entity);
+        }
+
+        public IEnumerable<Entity> GetAllEntities()
+        {
+            return entities.Select(e => e.Entity);
         }
     }
 }
