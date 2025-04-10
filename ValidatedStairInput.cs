@@ -7,7 +7,7 @@
         public double OutsideDia { get; set; }
         public double RotationDeg { get; set; }
         public int? MidLandingAfterTread { get; set; }
-        public bool IsClockwise { get; set; } // Added property
+        public bool IsClockwise { get; set; }
 
         public ValidatedStairInput(double centerPoleDia, double overallHeight, double outsideDia, double rotationDeg, int? midLandingAfterTread = null, bool isClockwise = true)
         {

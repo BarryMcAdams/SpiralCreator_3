@@ -30,59 +30,51 @@ namespace SpiralStairPlugin
                 throw new InvalidOperationException("Failed to access BlockTableRecord for ModelSpace.");
             }
 
-            // Define the treads array to store the landing entity
-            Entity[] treads = new Entity[1]; // Create one landing
-
-            double outerRadius = parameters.OutsideDia / 2;    // Full width from center to outside
-            double landingLength = 50.0;                       // Long side of rectangle
-            double landingThickness = 0.25;                    // Consistent with treads
-            double height = parameters.OverallHeight - landingThickness; // Top at OverallHeight
+            Entity[] landing = new Entity[1];
+            double landingThickness = 0.25;
+            double landingWidth = (parameters.OutsideDia - parameters.CenterPoleDia) / 2;
+            double landingLength = landingWidth + 30; // Extend 30" beyond the outer radius
+            double height = parameters.OverallHeight; // Top landing at overall height
             double treadAngleRad = parameters.TreadAngle * Math.PI / 180;
-            double landingStartAngle = parameters.NumTreads * treadAngleRad * (parameters.IsClockwise ? 1 : -1);
+            double startAngle = parameters.NumTreads * treadAngleRad * (parameters.IsClockwise ? 1 : -1);
 
-            // Create a simple rectangular landing (without arc cutout for now)
-            Solid3d landing = new Solid3d();
+            Solid3d landingBox = new Solid3d();
             try
             {
-                // Create a rectangular Solid3d using CreateBox
-                landing.CreateBox(outerRadius, landingLength, landingThickness);
+                landingBox.CreateBox(landingWidth, landingLength, landingThickness);
                 doc.Editor.WriteMessage("\nSuccessfully created landing box.");
 
-                // Position the box so the bottom-left corner is at (0, 0, 0)
-                // CreateBox centers the box at (0, 0, 0), so we need to shift it
-                landing.TransformBy(Matrix3d.Displacement(new Vector3d(outerRadius / 2, landingLength / 2, 0)));
+                landingBox.TransformBy(Matrix3d.Displacement(new Vector3d(landingWidth / 2, landingLength / 2, 0)));
                 doc.Editor.WriteMessage("\nSuccessfully positioned landing.");
 
-                // Validate the resulting geometry
-                if (landing == null || landing.Bounds == null)
+                if (landingBox == null || landingBox.Bounds == null)
                 {
                     throw new InvalidOperationException("Landing geometry is invalid after creation.");
                 }
                 doc.Editor.WriteMessage("\nLanding geometry validated successfully.");
 
-                // Apply transformations
-                landing.TransformBy(Matrix3d.Rotation(landingStartAngle, Vector3d.ZAxis, Point3d.Origin));
+                landingBox.TransformBy(Matrix3d.Rotation(startAngle, Vector3d.ZAxis, Point3d.Origin));
                 doc.Editor.WriteMessage("\nSuccessfully applied rotation transformation to landing.");
-                landing.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height)));
+                landingBox.TransformBy(Matrix3d.Displacement(new Vector3d(0, 0, height)));
                 doc.Editor.WriteMessage("\nSuccessfully applied height displacement transformation to landing.");
 
-                btr.AppendEntity(landing);
+                btr.AppendEntity(landingBox);
                 doc.Editor.WriteMessage("\nSuccessfully appended landing to BlockTableRecord.");
-                tr.AddNewlyCreatedDBObject(landing, true);
+                tr.AddNewlyCreatedDBObject(landingBox, true);
                 doc.Editor.WriteMessage("\nSuccessfully added landing to transaction.");
 
-                treads[0] = landing;
-                landing.DowngradeOpen();
+                landing[0] = landingBox;
+                landingBox.DowngradeOpen();
                 doc.Editor.WriteMessage("\nSuccessfully downgraded landing open state.");
             }
             catch (Exception ex)
             {
-                doc.Editor.WriteMessage($"\nFailed to create landing: {ex.Message}\nStackTrace: {ex.StackTrace}");
-                treads[0] = null; // Ensure treads[0] is explicitly null if creation fails
+                doc.Editor.WriteMessage($"\nFailed to create top landing: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                landing[0] = null;
                 throw;
             }
 
-            return treads;
+            return landing;
         }
     }
 }

@@ -14,10 +14,7 @@
                 return null;
             }
 
-            // Determine if the rotation is clockwise based on RotationDeg
-            bool isClockwise = input.RotationDeg >= 0;
-
-            return new ValidatedStairInput(input.CenterPoleDia, input.OverallHeight, input.OutsideDia, input.RotationDeg, input.MidLandingAfterTread, isClockwise);
+            return new ValidatedStairInput(input.CenterPoleDia, input.OverallHeight, input.OutsideDia, input.RotationDeg, input.MidLandingAfterTread, input.IsClockwise);
         }
     }
 }

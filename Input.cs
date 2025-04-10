@@ -8,91 +8,74 @@ namespace SpiralStairPlugin
     {
         public StairInput GetInput(Document doc)
         {
-            using (InputForm form = new InputForm())
+            bool goBack;
+            do
             {
-                DialogResult result = form.ShowDialog();
-                if (result != DialogResult.OK || form.IsCanceled)
+                goBack = false;
+                using (InputForm form = new InputForm())
                 {
-                    return null;
-                }
+                    DialogResult result = form.ShowDialog();
+                    if (result != DialogResult.OK || form.IsCanceled)
+                    {
+                        return null;
+                    }
 
-                double centerPoleDia = form.CenterPoleDia;
-                double overallHeight = form.OverallHeight;
-                double outsideDia = form.OutsideDia;
-                double rotationDeg = form.RotationDeg;
+                    double centerPoleDia = form.CenterPoleDia;
+                    double overallHeight = form.OverallHeight;
+                    double outsideDia = form.OutsideDia;
+                    double rotationDeg = form.RotationDeg;
+                    bool isClockwise = form.IsClockwise;
 
-                // Prompt for mid-landing position if height exceeds 151"
-                int? midLandingAfterTread = null;
-                if (overallHeight > 151)
-                {
-                    // Calculate total treads to inform the user of the valid range
+                    // Calculate total treads to determine if a mid-landing is needed
                     ICalc calc = new Calc();
-                    ValidatedStairInput tempInput = new ValidatedStairInput(centerPoleDia, overallHeight, outsideDia, rotationDeg);
+                    ValidatedStairInput tempInput = new ValidatedStairInput(centerPoleDia, overallHeight, outsideDia, rotationDeg, isClockwise: isClockwise);
                     StairParameters parameters = calc.Calculate(tempInput);
                     if (parameters == null)
                     {
-                        doc.Editor.WriteMessage("\nFailed to calculate parameters for mid-landing prompt.");
+                        doc.Editor.WriteMessage("\nFailed to calculate parameters for mid-landing check.");
                         return null;
                     }
-                    int totalTreads = parameters.NumTreads;
 
-                    using (InputForm midLandingForm = new InputForm(totalTreads: totalTreads))
+                    // Check if a mid-landing is required (assuming residential for now; we can add a building type selector later)
+                    bool isResidential = true; // Placeholder; can be made configurable
+                    double heightLimit = isResidential ? 151 : 144;
+                    int? midLandingAfterTread = null;
+                    if (overallHeight > heightLimit)
                     {
-                        DialogResult midLandingResult = midLandingForm.ShowDialog();
-                        if (midLandingResult != DialogResult.OK || midLandingForm.IsCanceled)
+                        using (MidLandingPrompt midLandingForm = new MidLandingPrompt(overallHeight, parameters.NumTreads, isResidential))
                         {
-                            return null;
+                            DialogResult midLandingResult = midLandingForm.ShowDialog();
+                            if (midLandingResult == DialogResult.Cancel || midLandingForm.IsCanceled)
+                            {
+                                return null;
+                            }
+                            else if (midLandingResult == DialogResult.Retry || midLandingForm.GoBack)
+                            {
+                                goBack = true;
+                                continue;
+                            }
+                            else if (midLandingForm.IgnoreMidLanding)
+                            {
+                                // Proceed without a mid-landing
+                            }
+                            else
+                            {
+                                midLandingAfterTread = midLandingForm.MidLandingTreadIndex;
+                                if (midLandingAfterTread < 1 || midLandingAfterTread > parameters.NumTreads - 1)
+                                {
+                                    doc.Editor.WriteMessage($"\nInvalid mid-landing position. Must be between 1 and {parameters.NumTreads - 1}.");
+                                    goBack = true;
+                                    continue;
+                                }
+                            }
                         }
-
-                        midLandingAfterTread = midLandingForm.MidLandingAfterTread;
                     }
+
+                    return new StairInput(centerPoleDia, overallHeight, outsideDia, rotationDeg, midLandingAfterTread, isClockwise);
                 }
+            } while (goBack);
 
-                return new StairInput(centerPoleDia, overallHeight, outsideDia, rotationDeg, midLandingAfterTread);
-            }
-        }
-
-        public StairInput GetAdjustedInput(Document doc, ValidatedStairInput validInput, StairParameters parameters)
-        {
-            Editor ed = doc.Editor;
-
-            // Display calculated parameters
-            ed.WriteMessage($"\nCalculated Parameters:");
-            ed.WriteMessage($"\nNumber of treads: {parameters.NumTreads}");
-            ed.WriteMessage($"\nRiser height: {parameters.RiserHeight:F2} inches");
-            ed.WriteMessage($"\nTread angle: {parameters.TreadAngle:F2} degrees");
-
-            // Prompt if the user wants to adjust their input
-            PromptKeywordOptions pko = new PromptKeywordOptions("\nDo you want to adjust your input? [Yes/No]: ")
-            {
-                AllowNone = true
-            };
-            pko.Keywords.Add("Yes");
-            pko.Keywords.Add("No");
-            pko.Keywords.Default = "No";
-            PromptResult pr = ed.GetKeywords(pko);
-            if (pr.Status != PromptStatus.OK || pr.StringResult == "No")
-            {
-                return null; // No adjustments, return null to proceed with current input
-            }
-
-            // Show the form with current values pre-filled
-            using (InputForm form = new InputForm(
-                initialCenterPoleDia: parameters.CenterPoleDia,
-                initialOverallHeight: parameters.OverallHeight,
-                initialOutsideDia: parameters.OutsideDia,
-                initialRotationDeg: parameters.RotationDeg,
-                initialMidLandingAfterTread: validInput.MidLandingAfterTread,
-                totalTreads: parameters.OverallHeight > 151 ? (int?)parameters.NumTreads : null))
-            {
-                DialogResult result = form.ShowDialog();
-                if (result != DialogResult.OK || form.IsCanceled)
-                {
-                    return null;
-                }
-
-                return new StairInput(form.CenterPoleDia, form.OverallHeight, form.OutsideDia, form.RotationDeg, form.MidLandingAfterTread);
-            }
+            return null; // Should never reach here, but included for completeness
         }
 
         public void ShowRetryPrompt(string message)
